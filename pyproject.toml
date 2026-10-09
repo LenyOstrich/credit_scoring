@@ -9,10 +9,18 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "jupyter (>=1.1.1,<2.0.0)"
+    "jupyter (>=1.1.1,<2.0.0)",
+    "python-dotenv (>=1.2.3,<2.0.0)",
+    "pandas (>=3.0.6,<4.0.0)",
+    "psycopg2-binary (>=2.9.13,<3.0.0)"
 ]
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [
+    { include = "app", from = "src" }
+]
