@@ -6,8 +6,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 DEFAULT_BUREAU_PATH = Path("logs/output/bureau.csv")
 DEFAULT_POS_CASH_BALANCE_PATH = Path("logs/output/POS_CASH_balance.csv")
 
