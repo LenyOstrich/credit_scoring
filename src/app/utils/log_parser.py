@@ -1,3 +1,4 @@
+import csv
 import json
 import logging
 import re
@@ -6,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+DEFAULT_BUREAU_PATH = Path("logs/output/bureau.csv")
+DEFAULT_POS_CASH_BALANCE_PATH = Path("logs/output/POS_CASH_balance.csv")
 
 BUREAU_COLUMNS = [
     "SK_ID_CURR",
@@ -153,7 +157,10 @@ def handle_unknown(data: dict[str, Any]) -> None:
     Args:
         data: Данные неизвестного события.
     """
-    return
+    logger.warning(
+        "Неизвестный тип события, данные проигнорированы: %s",
+        type(data).__name__,
+    )
 
 
 type Handler = Callable[
@@ -188,8 +195,12 @@ def process_command(
     return handler(data)
 
 
-def read_log(path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Читает лог-файл и преобразует его в два DataFrame.
+def read_log(
+    path: str | Path,
+    bureau_path: str | Path,
+    pos_cash_balance_path: str | Path,
+) -> None:
+    """Читает log-файл и потоково записывает данные в два CSV.
 
     Обрабатываются события типов bureau и POS_CASH_balance.
     Пустые строки, некорректный JSON, записи не в формате словаря
@@ -197,77 +208,115 @@ def read_log(path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     Args:
         path: Путь к исходному log-файлу.
-
-    Returns:
-        Кортеж из двух DataFrame:
-            - таблица bureau;
-            - таблица POS_CASH_balance.
+        bureau_path: Путь к выходному bureau.csv.
+        pos_cash_balance_path: Путь к выходному POS_CASH_balance.csv.
     """
-    bureau_rows = []
-    pos_cash_balance_rows = []
     processed_lines = 0
+    bureau_rows_count = 0
+    pos_cash_balance_rows_count = 0
+
+    bureau_output = Path(bureau_path)
+    pos_cash_balance_output = Path(pos_cash_balance_path)
+
+    bureau_output.parent.mkdir(parents=True, exist_ok=True)
+    pos_cash_balance_output.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info("Начало обработки файла: %s", path)
 
-    with Path.open(path, encoding="utf-8") as f:
-        for line in f:
+    with (
+        Path(path).open(encoding="utf-8") as log_file,
+        bureau_output.open("w", newline="", encoding="utf-8") as bureau_file,
+        pos_cash_balance_output.open(
+            "w", newline="", encoding="utf-8"
+        ) as pos_cash_balance_file,
+    ):
+        bureau_writer = csv.writer(bureau_file)
+        pos_cash_balance_writer = csv.writer(pos_cash_balance_file)
+
+        bureau_writer.writerow(BUREAU_COLUMNS)
+        pos_cash_balance_writer.writerow(POS_CASH_BALANCE_COLUMNS)
+
+        for line in log_file:
             processed_lines += 1
 
             if processed_lines % 100_000 == 0:
-                logger.info(
-                    "Обработано строк: %d",
-                    processed_lines,
-                )
+                logger.info("Обработано строк: %d", processed_lines)
 
             line = line.strip()
 
             if not line:
+                logger.warning(
+                    "Строка %d: пустая строка, пропущено",
+                    processed_lines,
+                )
                 continue
 
             try:
                 record = json.loads(line)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "Строка %d: некорректный JSON (%s), пропущено",
+                    processed_lines,
+                    exc.msg,
+                )
                 continue
 
             if not isinstance(record, dict):
+                logger.warning(
+                    "Строка %d: JSON не является объектом "
+                    "(получен %s), пропущено",
+                    processed_lines,
+                    type(record).__name__,
+                )
                 continue
 
             record_type = record.get("type")
             data = record.get("data")
 
             if record_type is None or data is None:
+                logger.warning(
+                    "Строка %d: отсутствует поле 'type' или 'data', пропущено",
+                    processed_lines,
+                )
                 continue
 
             if record_type not in {"bureau", "POS_CASH_balance"}:
+                logger.debug(
+                    "Строка %d: тип '%s' не обрабатывается, пропущено",
+                    processed_lines,
+                    record_type,
+                )
                 continue
 
-            result = process_command(record_type, data)
+            try:
+                result = process_command(record_type, data)
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "Строка %d (тип '%s'): повреждённая запись "
+                    "пропущена (%s: %s)",
+                    processed_lines,
+                    record_type,
+                    type(exc).__name__,
+                    exc,
+                )
+                continue
 
             if record_type == "bureau":
-                bureau_rows.append(result)
+                bureau_writer.writerow(result)
+                bureau_rows_count += 1
             else:
-                pos_cash_balance_rows.extend(result)
+                pos_cash_balance_writer.writerows(result)
+                pos_cash_balance_rows_count += len(result)
 
     logger.info(
         "Чтение файла завершено. Обработано строк: %d",
         processed_lines,
     )
-
-    logger.info("Создание DataFrame...")
-
-    bureau_df = pd.DataFrame(bureau_rows, columns=BUREAU_COLUMNS)
-
-    pos_cash_balance_df = pd.DataFrame(
-        pos_cash_balance_rows, columns=POS_CASH_BALANCE_COLUMNS
-    )
-
     logger.info(
-        "DataFrame созданы: bureau=%d строк, POS_CASH_balance=%d строк",
-        len(bureau_df),
-        len(pos_cash_balance_df),
+        "Созданы CSV: bureau=%d строк, POS_CASH_balance=%d строк",
+        bureau_rows_count,
+        pos_cash_balance_rows_count,
     )
-
-    return bureau_df, pos_cash_balance_df
 
 
 def parse_logs_as_object(value: str) -> dict[str, Any]:
@@ -299,32 +348,7 @@ def parse_logs_as_object(value: str) -> dict[str, Any]:
     return result
 
 
-def save_dataframe(
-    path: str | Path,
-    df: pd.DataFrame,
-    name: str,
-) -> None:
-    """Сохраняет DataFrame в CSV-файл.
-
-    Если указанная директория не существует, она создаётся.
-
-    Args:
-        path: Путь к директории для сохранения файла.
-        df: DataFrame, который необходимо сохранить.
-        name: Имя выходного CSV-файла без расширения.
-    """
-    output_path = Path(path)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    logger.info("Идёт сохранение...")
-
-    df.to_csv(
-        output_path / f"{name}.csv",
-        index=False,
-    )
-
-
-def main():
+def main() -> None:
     """Запускает обработку log-файла.
 
     Запрашивает у пользователя путь к исходному log-файлу
@@ -338,28 +362,14 @@ def main():
 
     log_path = Path(input("Введите путь к log-файлу: ").strip())
 
-    pos_cash_balance_path = Path(
-        input("Введите путь для POS_CASH_balance.csv: ").strip()
-    )
-
-    bureau_path = Path(input("Введите путь для bureau.csv: ").strip())
-
     if not log_path.is_file():
         print(f"Файл не найден: {log_path}")
         return
 
-    bureau_df, pos_cash_balance_df = read_log(log_path)
-
-    save_dataframe(
-        bureau_path / "bureau",
-        bureau_df,
-        "bureau",
-    )
-
-    save_dataframe(
-        pos_cash_balance_path / "POS_CASH_balance",
-        pos_cash_balance_df,
-        "POS_CASH_balance",
+    read_log(
+        path=log_path,
+        bureau_path=DEFAULT_BUREAU_PATH,
+        pos_cash_balance_path=DEFAULT_POS_CASH_BALANCE_PATH,
     )
 
     logger.info("Обработка завершена.")
