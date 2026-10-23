@@ -99,19 +99,38 @@ def income_per_person(
     return income / people_count.where(people_count != 0)
 
 
-def income_difference_by_group(df: pd.DataFrame) -> pd.Series:
-    """Вычисляет разницу между средним доходом в группе по полу и образованию и доходом заявителя.
+def income_difference_by_group(
+    df: pd.DataFrame,
+    group_means: pd.Series,
+    global_mean: float,
+) -> pd.Series:
+    """Вычисляет разницу между средним доходом группы и доходом заявителя.
+
+    Средние значения по группам рассчитываются на обучающей выборке
+    и передаются в функцию. Если группа отсутствует в обучающей выборке,
+    используется общий средний доход обучающей выборки.
 
     Args:
-        df: датафрейм, содержащий информацию о поле, образовании и доходе
+        df: датафрейм с информацией о поле, образовании и доходе заявителей.
+        group_means: средний доход для каждой группы, определяемой сочетанием
+            признаков CODE_GENDER и NAME_EDUCATION_TYPE, рассчитанный на train.
+        global_mean: общий средний доход на обучающей выборке, используемый
+            для групп, отсутствующих в group_means.
 
     Returns:
-        pd.Series: признак разницы между средним доходом в группе и доходом
-            заявителя
+        pd.Series: разница между средним доходом соответствующей группы
+            и доходом заявителя. Индекс соответствует индексу исходного df.
     """
-    group_mean_income = df.groupby(["CODE_GENDER", "NAME_EDUCATION_TYPE"])[
-        "AMT_INCOME_TOTAL"
-    ].transform("mean")
+    group_keys = pd.MultiIndex.from_frame(
+        df[["CODE_GENDER", "NAME_EDUCATION_TYPE"]]
+    )
+
+    group_mean_income = group_means.reindex(group_keys)
+
+    group_mean_income = pd.Series(
+        group_mean_income.to_numpy(),
+        index=df.index,
+    ).fillna(global_mean)
 
     return group_mean_income - df["AMT_INCOME_TOTAL"]
 
@@ -157,6 +176,29 @@ def get_interest_rate(
     return df["SK_ID_CURR"].map(mean_rate).rename("interest_rate")
 
 
+def calculate_income_group_means(
+    train_df: pd.DataFrame,
+) -> tuple[pd.Series, float]:
+    """Вычисляет средние доходы по группам и по всей обучающей выборке.
+
+    Args:
+        train_df: датафрейм обучающей выборки с признаками пола,
+            образования и общего дохода заявителей.
+
+    Returns:
+        tuple[pd.Series, float]: средние доходы по группам, определяемым
+            сочетанием CODE_GENDER и NAME_EDUCATION_TYPE, и общий средний
+            доход обучающей выборки.
+    """
+    group_means = train_df.groupby(["CODE_GENDER", "NAME_EDUCATION_TYPE"])[
+        "AMT_INCOME_TOTAL"
+    ].mean()
+
+    global_mean = train_df["AMT_INCOME_TOTAL"].mean()
+
+    return group_means, global_mean
+
+
 def run(data_path: Path, output_path: Path) -> None:
     r"""Запускает генерацию признаков для application train\test датасетов.
 
@@ -181,6 +223,10 @@ def run(data_path: Path, output_path: Path) -> None:
     )
 
     previous_application = pd.read_csv(data_path / "previous_application.csv")
+
+    group_means, global_mean = calculate_income_group_means(
+        pd.read_csv(data_path / "application_train.csv")
+    )
 
     for filename in ("application_train.csv", "application_test.csv"):
         logger.info("Начата обработка %s датасета", filename)
@@ -253,7 +299,9 @@ def run(data_path: Path, output_path: Path) -> None:
         logger.info(
             "Подсчёт разницы между средним доходом в группе и доходом заявителя"
         )
-        new_features["income_group_diff"] = income_difference_by_group(df)
+        new_features["income_group_diff"] = income_difference_by_group(
+            df, group_means, global_mean
+        )
 
         logger.info("Подсчёт процентной ставки")
         new_features["interest_rate"] = get_interest_rate(

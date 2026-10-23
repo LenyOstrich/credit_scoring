@@ -11,6 +11,7 @@ from app.modelling.features.common import (
     prepare_output_directory,
     setup_logging,
 )
+from app.utils.bureau_validate import validate_bureau_data
 
 logger = logging.getLogger(__name__)
 
@@ -18,18 +19,18 @@ logger = logging.getLogger(__name__)
 def calculate_overdue_to_open_credit_ratio(
     bureau: pd.DataFrame,
 ) -> pd.Series:
-    """Рассчитывает долю просрочки от суммы открытых кредитов клиента.
+    """Рассчитывает долю текущей просрочки от суммы активных кредитов клиента.
 
-    Для каждого клиента суммирует максимальные суммы просрочки по всем
-    кредитам и делит полученную сумму на общую сумму активных кредитов.
+    Для каждого клиента суммирует текущую задолженность по просроченным
+    платежам по активным кредитам и делит её на общую сумму этих кредитов.
 
     Args:
         bureau: Данные о кредитах из файла bureau.csv.
 
     Returns:
-        pd.Series: Доля просрочки от суммы открытых кредитов для каждого
-            клиента. Если сумма активных кредитов равна нулю или отсутствует,
-            результат равен NaN.
+        pd.Series: Доля текущей просрочки от суммы активных кредитов
+            для каждого клиента. Если сумма активных кредитов равна
+            нулю или отсутствует, результат равен NaN.
     """
     active_credits = bureau["CREDIT_ACTIVE"].eq("Active")
 
@@ -41,12 +42,13 @@ def calculate_overdue_to_open_credit_ratio(
     )
 
     overdue_amount = (
-        bureau["AMT_CREDIT_MAX_OVERDUE"]
+        bureau["AMT_CREDIT_SUM_OVERDUE"]
+        .where(active_credits)
         .groupby(bureau["SK_ID_CURR"])
         .sum(min_count=1)
     )
 
-    return overdue_amount / open_credit_amount.where(open_credit_amount != 0)
+    return overdue_amount / open_credit_amount.where(open_credit_amount > 0)
 
 
 def calculate_credit_counts_by_type(
@@ -153,6 +155,8 @@ def run(data_path: Path, output_path: Path) -> None:
     logger.info("Начат расчёт признаков для bureau.csv")
 
     bureau = pd.read_csv(input_file)
+
+    bureau = validate_bureau_data(bureau)
 
     logger.info("Расчёт минимальной и максимальной суммы просрочки")
     bureau_features = bureau.groupby("SK_ID_CURR").agg(

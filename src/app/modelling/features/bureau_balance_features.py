@@ -11,6 +11,7 @@ from app.modelling.features.common import (
     prepare_output_directory,
     setup_logging,
 )
+from app.utils.bureau_validate import validate_bureau_data
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,7 @@ def run(data_path: Path, output_path: Path) -> None:
 
     bureau_balance = pd.read_csv(balance_file)
     bureau = pd.read_csv(bureau_file)
+    bureau = validate_bureau_data(bureau)
 
     logger.info("Расчёт количества и долей кредитов")
     status_features = calculate_credit_status_features(
