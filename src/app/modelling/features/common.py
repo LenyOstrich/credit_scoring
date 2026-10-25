@@ -8,14 +8,6 @@ from app.utils.data_loader import download_home_credit_data_from_kaggle
 logger = logging.getLogger(__name__)
 
 
-def setup_logging() -> None:
-    """Настраивает логирование."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-    )
-
-
 def prepare_data_directory() -> Path:
     """Проверяет наличие датасетов или загружает их с Kaggle.
 

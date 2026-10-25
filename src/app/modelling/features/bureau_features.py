@@ -9,9 +9,9 @@ from app.modelling.features.common import (
     confirm_feature_generation,
     prepare_data_directory,
     prepare_output_directory,
-    setup_logging,
 )
 from app.utils.bureau_validate import validate_bureau_data
+from app.utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 

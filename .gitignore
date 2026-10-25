@@ -75,7 +75,7 @@ Thumbs.db
 ehthumbs.db
 
 # ===== Модели и большие данные (для credit_scoring) =====
-*.pkl
+#*.pkl
 *.h5
 *.pb
 *.onnx
@@ -84,3 +84,6 @@ ehthumbs.db
 
 # ===== Локальные тестовые скрипты =====
 /scripts/
+
+# ===== Catboost info =====
+/catboost_info/
