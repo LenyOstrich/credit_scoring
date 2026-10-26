@@ -6,8 +6,8 @@
 
 ## 1. Предварительные условия
 
-- Исходные CSV Home Credit Default Risk лежат в `data/` (см. корневой
-  `README.md`).
+- Исходные CSV Home Credit Default Risk лежат в `data/home-credit-default-risk/`
+  (см. корневой `README.md`).
 - Признаки ДЗ-3 сгенерированы в `data/processed/` — см.
   [Запуск генерации и проверка признаков](feature_generation.md). Без
   `application_train.csv`/`application_test.csv`, `bureau_features.csv`,
@@ -22,7 +22,7 @@
 
 ```powershell
 python -m app.scoring.train_scoring_models `
-    --raw-data-dir data `
+    --raw-data-dir data/home-credit-default-risk `
     --features-dir data/processed `
     --models-dir data/models `
     --reports-dir docs/figures
@@ -39,7 +39,7 @@ python -m app.scoring.train_scoring_models
 
 | Аргумент | По умолчанию | Назначение |
 |---|---|---|
-| `--raw-data-dir` | `data` | исходные CSV Home Credit |
+| `--raw-data-dir` | `data/home-credit-default-risk` | исходные CSV Home Credit |
 | `--features-dir` | `data/processed` | признаки, сгенерированные в ДЗ-3 |
 | `--models-dir` | `data/models` | куда сохранять `*.pkl` обученных моделей |
 | `--reports-dir` | `docs/figures` | куда сохранять таблицу метрик и графики |

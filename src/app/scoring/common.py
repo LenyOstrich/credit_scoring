@@ -67,7 +67,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--raw-data-dir",
         type=Path,
-        default=Path("data"),
+        default=Path("data/home-credit-default-risk"),
         help="Директория с исходными CSV Home Credit.",
     )
     parser.add_argument(

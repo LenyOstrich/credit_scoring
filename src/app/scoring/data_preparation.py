@@ -1,6 +1,7 @@
 """Сборка и подготовка датасета для обучения модели кредитного скоринга"""
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -429,6 +430,36 @@ def prepare_single_model_dataset(
     return train_k, test_k
 
 
+DEFAULT_FEATURE_FILES = (
+    "application_train_features",
+    "bureau_features",
+    "bureau_balance_features",
+)
+
+
+def build_feature_table(
+    raw_data_dir: Path,
+    features_dir: Path,
+    feature_files: Sequence[str] = DEFAULT_FEATURE_FILES,
+) -> pd.DataFrame:
+    """Собирает таблицу "клиент -> все признаки + TARGET".
+
+    Args:
+        raw_data_dir: директория с исходными CSV Home Credit.
+        features_dir: директория со сгенерированными признаками.
+        feature_files: имена файлов с признаками для джойна
+
+    Returns:
+        pd.DataFrame: датафрейм с SK_ID_CURR, TARGET и всеми признаками,
+            готовый к select_features/отбору строк.
+    """
+    base_df = load_application_with_target(raw_data_dir)
+    feature_tables = load_generated_features(features_dir, list(feature_files))
+    df = merge_features_by_client_id(base_df, feature_tables)
+    df = treat_outliers(df)
+    return drop_redundant_housing_columns(df, raw_data_dir)
+
+
 def prepare_datasets_for_models(
     raw_data_dir: Path,
     features_dir: Path,
@@ -451,25 +482,21 @@ def prepare_datasets_for_models(
                 "catboost": (X_train, X_test, y_train, y_test),
             }
     """
-    base_df = load_application_with_target(raw_data_dir)
-    feature_tables = load_generated_features(
-        features_dir,
-        [
-            "application_train_features",
-            "bureau_features",
-            "bureau_balance_features",
-        ],
-    )
-    df = merge_features_by_client_id(base_df, feature_tables)
-    df = treat_outliers(df)
-    df = drop_redundant_housing_columns(df, raw_data_dir)
+    df = build_feature_table(raw_data_dir, features_dir)
 
-    feature_columns = select_features(df)
-    split = split_train_test(
-        df[[*feature_columns, "TARGET"]],
-        "TARGET",
-        test_size=0.2,
-        random_state=random_state,
+    # Сплит — до отбора признаков: select_features не должен видеть TARGET
+    full_split = split_train_test(
+        df, "TARGET", test_size=0.2, random_state=random_state
+    )
+
+    feature_columns = select_features(
+        full_split.X_train.assign(TARGET=full_split.y_train)
+    )
+    split = TrainTestSplit(
+        X_train=full_split.X_train[feature_columns],
+        X_test=full_split.X_test[feature_columns],
+        y_train=full_split.y_train,
+        y_test=full_split.y_test,
     )
 
     numeric_columns = split.X_train.select_dtypes("number").columns.tolist()
