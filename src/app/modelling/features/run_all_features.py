@@ -6,6 +6,7 @@ from app.modelling.features import (
     application_train_test_features,
     bureau_balance_features,
     bureau_features,
+    pos_cash_balance_features,
 )
 from app.modelling.features.common import (
     confirm_feature_generation,
@@ -32,6 +33,7 @@ def main() -> None:
     application_train_test_features.run(data_path, output_path)
     bureau_features.run(data_path, output_path)
     bureau_balance_features.run(data_path, output_path)
+    pos_cash_balance_features.run(data_path, output_path)
 
     logger.info("Генерация всех признаков завершена")
 
