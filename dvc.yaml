@@ -1,0 +1,21 @@
+stages:
+  features:
+    cmd: poetry run python -m app.modelling.features.run_all_features --non-interactive
+    deps:
+      - data/home-credit-default-risk
+      - src/app/modelling/features
+    outs:
+      - data/processed
+
+  prepare_datasets:
+    cmd: poetry run python -m app.scoring.prepare_datasets
+    deps:
+      - data/processed
+      - data/home-credit-default-risk
+      - src/app/scoring/data_preparation.py
+      - src/app/scoring/missing_value_handling.py
+      - src/app/scoring/outlier_handling.py
+      - src/app/scoring/common.py
+      - src/app/scoring/prepare_datasets.py
+    outs:
+      - data/model_ready

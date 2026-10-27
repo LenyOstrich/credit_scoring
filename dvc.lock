@@ -1,0 +1,61 @@
+schema: '2.0'
+stages:
+  features:
+    cmd: poetry run python -m app.modelling.features.run_all_features 
+      --non-interactive
+    deps:
+    - path: data/home-credit-default-risk
+      hash: md5
+      md5: be145c3854454ad97fd16454f9aed966.dir
+      size: 2684261617
+      nfiles: 10
+    - path: src/app/modelling/features
+      hash: md5
+      md5: abb2dd87434c6b9e185af25828f33b2c.dir
+      size: 84070
+      nfiles: 10
+    outs:
+    - path: data/processed
+      hash: md5
+      md5: ee91301c402a9acb6cfff5d341f9ce16.dir
+      size: 112425439
+      nfiles: 4
+  prepare_datasets:
+    cmd: poetry run python -m app.scoring.prepare_datasets
+    deps:
+    - path: data/home-credit-default-risk
+      hash: md5
+      md5: be145c3854454ad97fd16454f9aed966.dir
+      size: 2684261617
+      nfiles: 10
+    - path: data/processed
+      hash: md5
+      md5: ee91301c402a9acb6cfff5d341f9ce16.dir
+      size: 112425439
+      nfiles: 4
+    - path: src/app/scoring/common.py
+      hash: md5
+      md5: 3d8f472b53aa478e850b800d98d232c3
+      size: 4918
+    - path: src/app/scoring/data_preparation.py
+      hash: md5
+      md5: 8026c8e11d074bd7ff31c135b2e8645e
+      size: 18949
+    - path: src/app/scoring/missing_value_handling.py
+      hash: md5
+      md5: 54c6d9311958f9c9867e656c1a88628e
+      size: 11722
+    - path: src/app/scoring/outlier_handling.py
+      hash: md5
+      md5: 018dd2066826af5f528dadbc83e7c9fb
+      size: 7198
+    - path: src/app/scoring/prepare_datasets.py
+      hash: md5
+      md5: e0282b41d991a8ccd84fd6b219315a5f
+      size: 3080
+    outs:
+    - path: data/model_ready
+      hash: md5
+      md5: 8dae615d9fe79709689410941b290e66.dir
+      size: 825622098
+      nfiles: 6
